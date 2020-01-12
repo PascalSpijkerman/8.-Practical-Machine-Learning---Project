@@ -1,0 +1,111 @@
+---
+title: "Effectiveness of working out"
+author: "Pascal Spijkerman"
+date: "11/01/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE, fig.width=10, fig.height=5)
+options(width=120)
+```
+
+# The effectiveness of working out
+
+This paper discusses the development of a machine learning algorithm that predicts the manner of performing various exercises by tracking these excercises via accelerometers.  
+
+The machine learning is build on th etraining set from the Human Activity Recognition. More information may be found here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har  
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. “Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human ’13)”. Stuttgart, Germany: ACM SIGCHI, 2013.  
+  
+A short description of the datasets content from the authors’ website:
+  
+“Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+  
+Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes. Participants were supervised by an experienced weight lifter to make sure the execution complied to the manner they were supposed to simulate. The exercises were performed by six male participants aged between 20-28 years, with little weight lifting experience. We made sure that all participants could easily simulate the mistakes in a safe and controlled manner by using a relatively light dumbbell (1.25kg)."
+  
+## Importing data
+
+We start by importing the training set and testing set.
+
+```{r, message = FALSE, results = 'hide'}
+library(tidyverse)
+library(moderndive)
+library(skimr)
+library(caret)
+library(kernlab)
+library(ISLR)
+library(gridExtra)
+library(Hmisc)
+library(rattle)
+library(randomForest)
+library(gbm)
+library(corrplot)
+
+TrainingData <- read.csv("./pml-training.csv")
+TestingData <- read.csv("./pml-testing.csv")
+```
+
+
+## Exploratory Data Analysis and data cleansing
+
+In this chapter we use cross-validation to split the training set into a training + test set to determine the correct approach for the variables we would like to use in the algorithm. The reason we use cross-validation, is that the training set consists of very few observations (20) and a lot of variables (160). It is therefore crucial to determine the right variables to be included in the algorithm. 
+
+We also remove Near Zerio variance Values, NA values, the identification variables, and highly correlated predictors. The final training and validation set will consists of 95 predictors.  
+
+```{r, results = 'hide'}
+glimpse(TrainingData)
+```
+
+```{r}
+# Remove identification variables (first 5 variables of the dataset)
+training <- TrainingData[, -(1:5)]
+testing  <- TestingData[, -(1:5)]
+
+# Cleaning values with nearly zero variance
+NZV <- nearZeroVar(training)
+training <- training[, -NZV]
+testing <- testing[, -NZV]
+
+# Removing NA Values
+for (colName in names(training)){
+  if(class(training[[colName]]) %in% c("integer", "numeric")){
+    m<-mean(training[[colName]], na.rm = TRUE)
+    training[[colName]][is.na(training[[colName]])]<-m
+  }
+}
+
+# Splitting trainingdata into a trainingdata and validation data
+inTrain <- createDataPartition(training$classe, p = 0.75, list = FALSE)
+
+trainingset <- training[inTrain,]
+testingset <- training[-inTrain,]
+dim(trainingset); dim(testingset)
+```
+
+## Model Building
+
+In this section, we will create a model based on the trainingset. 
+
+For our model, we use the trainContorl function to set the number of resampling to 200 to ensure a highly accurate algorithm. The resampling value (boot_control) is then passed onto the train function of the model. In addition, we use the function scaled = FALSE to disregard the preprocessing, as we already did the preprocessing in the chapter before.  
+
+```{r}
+
+train_control <- trainControl(method="cv", number=200)
+modelfit <- train(classe~., data = trainingset, method="rf", trControl = train_control)
+modelfit$finalmodel
+```
+
+## Prediction of the models on the testingset
+
+In this chapter, we will use the model with the highest accuracy and test is on the testing set. The testing set is the dataset we partitioned in the first chapter. This data is 25% of the training set. 
+
+```{r}
+predictions <- predict(modelfit, newdata = testing)
+predictions
+```
+
+
+
+
+
